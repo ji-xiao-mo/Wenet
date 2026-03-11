@@ -1,0 +1,50 @@
+# 数据文件
+aishell_data/
+data/
+*.tgz
+*.tar.gz
+*.zip
+*.bin
+*.csv
+*.json
+
+# 训练产生的文件
+exp/
+tensorboard/
+logs/
+*.log
+
+# Checkpoint 文件
+*.pt
+*.pth
+*.ckpt
+*.model
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境（常见名称，但不包括 wenet 代码目录）
+venv/
+env/
+ENV/
+.venv/
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.bak
+*.cache
