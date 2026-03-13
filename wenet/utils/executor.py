@@ -157,5 +157,9 @@ class Executor:
                              timer=self.cv_step_timer)
         for loss_name, loss_value in loss_dict.items():
             loss_dict[loss_name] = loss_dict[loss_name] / num_seen_utts
-        loss_dict["acc"] = sum(total_acc) / len(total_acc)
+        # Handle empty total_acc (when no valid batches were processed)
+        if len(total_acc) > 0:
+            loss_dict["acc"] = sum(total_acc) / len(total_acc)
+        else:
+            loss_dict["acc"] = 0.0
         return loss_dict

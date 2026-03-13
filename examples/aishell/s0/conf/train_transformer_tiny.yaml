@@ -1,0 +1,82 @@
+# network architecture - 极简 Transformer 配置
+encoder: transformer
+encoder_conf:
+    output_size: 144
+    attention_heads: 4
+    linear_units: 512
+    num_blocks: 4
+    dropout_rate: 0.1
+    positional_dropout_rate: 0.1
+    attention_dropout_rate: 0.0
+    input_layer: conv2d
+    normalize_before: true
+    pos_enc_layer_type: 'rel_pos'
+
+decoder: transformer
+decoder_conf:
+    attention_heads: 4
+    linear_units: 512
+    num_blocks: 2
+    dropout_rate: 0.1
+    positional_dropout_rate: 0.1
+    self_attention_dropout_rate: 0.0
+    src_attention_dropout_rate: 0.0
+
+tokenizer: char
+tokenizer_conf:
+  symbol_table_path: 'data/dict/lang_char.txt'
+  split_with_space: false
+  special_tokens:
+    <blank>: 0
+    <unk>: 1
+    <sos>: 2
+    <eos>: 2
+
+ctc: ctc
+ctc_conf:
+  ctc_blank_id: 0
+
+cmvn: global_cmvn
+cmvn_conf:
+  cmvn_file: 'data/train/global_cmvn'
+  is_json_cmvn: true
+
+model: asr_model
+model_conf:
+    ctc_weight: 0.3
+    lsm_weight: 0.1
+    length_normalized_loss: false
+
+dataset: asr
+dataset_conf:
+    filter_conf:
+        max_length: 8000
+        min_length: 0
+        token_max_length: 50
+        token_min_length: 1
+    resample_conf:
+        resample_rate: 16000
+    speed_perturb: false
+    fbank_conf:
+        num_mel_bins: 80
+        frame_shift: 10
+        frame_length: 25
+        dither: 0.0
+    spec_aug: false
+    shuffle: false
+    sort: false
+    batch_conf:
+        batch_type: 'static'
+        batch_size: 1
+
+grad_clip: 5
+accum_grad: 16
+max_epoch: 30
+log_interval: 20
+
+optim: adam
+optim_conf:
+    lr: 0.0005
+scheduler: warmuplr
+scheduler_conf:
+    warmup_steps: 2000

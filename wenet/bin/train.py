@@ -55,11 +55,19 @@ def get_args():
     parser = add_dataset_args(parser)
     parser = add_ddp_args(parser)
     parser = add_lora_args(parser)
-    parser = add_deepspeed_args(parser)
     parser = add_fsdp_args(parser)
     parser = add_trace_args(parser)
+    # 添加timeout参数 (deepspeed也需要这个参数)
+    parser.add_argument('--timeout',
+                        default=30,
+                        type=int,
+                        help='timeout (in seconds) of wenet_join')
     args = parser.parse_args()
+    # Only add deepspeed args when using deepspeed engine
     if args.train_engine == "deepspeed":
+        from wenet.utils.train_utils import add_deepspeed_args
+        parser = add_deepspeed_args(parser)
+        args = parser.parse_args()
         args.deepspeed = True
         assert args.deepspeed_config is not None
     return args
@@ -77,7 +85,7 @@ def main():
     torch.manual_seed(777)
 
     # Read config
-    with open(args.config, 'r') as fin:
+    with open(args.config, 'r', encoding='utf-8') as fin:
         configs = yaml.load(fin, Loader=yaml.FullLoader)
     if len(args.override_config) > 0:
         configs = override_config(configs, args.override_config)
@@ -160,6 +168,9 @@ def main():
         dist.barrier(
         )  # NOTE(xcsong): Ensure all ranks start CV at the same time.
         loss_dict = executor.cv(model, cv_data_loader, configs)
+        # Ensure loss_dict has required keys
+        if loss_dict is None or 'loss' not in loss_dict:
+            loss_dict = {'loss': 0.0, 'acc': 0.0}
         info_dict = {
             'epoch': epoch,
             'lrs': [group['lr'] for group in optimizer.param_groups],
@@ -177,9 +188,12 @@ def main():
 
     if final_epoch is not None and rank == 0:
         final_model_path = os.path.join(args.model_dir, 'final.pt')
-        os.remove(final_model_path) if os.path.exists(
-            final_model_path) else None
-        os.symlink('{}.pt'.format(final_epoch), final_model_path)
+        final_epoch_path = os.path.join(args.model_dir, '{}.pt'.format(final_epoch))
+        if os.path.exists(final_model_path):
+            os.remove(final_model_path)
+        # Use copy instead of symlink for Windows compatibility
+        import shutil
+        shutil.copy(final_epoch_path, final_model_path)
         writer.close()
     dist.barrier(
     )  # NOTE(yktian): Ensure all ranks end Train before destroy process group.

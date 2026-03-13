@@ -76,7 +76,11 @@ def open_or_fd(file, mode='rb'):
             fd = gzip.open(file, mode)
         # a normal file...
         else:
-            fd = open(file, mode)
+            # Add encoding for text mode
+            if 'b' not in mode:
+                fd = open(file, mode, encoding='utf-8')
+            else:
+                fd = open(file, mode)
     except TypeError:
         # 'file' is opened file descriptor,
         fd = file

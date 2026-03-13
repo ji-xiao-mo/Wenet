@@ -348,10 +348,10 @@ class TextLineDataPipe(IterDataPipe):
     """ Streamming Text line
     """
 
-    def __init__(self, filenames, mode='r'):
+    def __init__(self, filenames, mode='r', encoding='utf-8'):
         super().__init__()
         _dp = datapipes.iter.FileLister(filenames)
-        _dp = datapipes.iter.FileOpener(_dp, mode=mode)
+        _dp = datapipes.iter.FileOpener(_dp, mode=mode, encoding=encoding)
         self.dp = _dp
 
     def __iter__(self):

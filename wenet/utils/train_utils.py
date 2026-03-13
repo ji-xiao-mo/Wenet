@@ -20,17 +20,33 @@ import os
 from contextlib import nullcontext
 from typing import List, Optional
 
-import deepspeed
+# DeepSpeed 完全禁用
+deepspeed = None
+DEEPSPEED_AVAILABLE = False
+
 import torch
 import torch.distributed as dist
 import torch.optim as optim
 import yaml
-from deepspeed.runtime.zero.stage3 import \
-    estimate_zero3_model_states_mem_needs_all_live
-from deepspeed.runtime.zero.stage_1_and_2 import \
-    estimate_zero2_model_states_mem_needs_all_live
-from deepspeed.utils.zero_to_fp32 import \
-    convert_zero_checkpoint_to_fp32_state_dict
+
+# 定义空函数替代 deepspeed 的功能
+def estimate_zero3_model_states_mem_needs_all_live(*args, **kwargs):
+    return {}
+
+def estimate_zero2_model_states_mem_needs_all_live(*args, **kwargs):
+    return {}
+
+def convert_zero_checkpoint_to_fp32_state_dict(*args, **kwargs):
+    return None
+
+# 注释掉 deepspeed 导入
+# import deepspeed
+# from deepspeed.runtime.zero.stage3 import \
+#     estimate_zero3_model_states_mem_needs_all_live
+# from deepspeed.runtime.zero.stage_1_and_2 import \
+#     estimate_zero2_model_states_mem_needs_all_live
+# from deepspeed.utils.zero_to_fp32 import \
+#     convert_zero_checkpoint_to_fp32_state_dict
 from tensorboardX import SummaryWriter
 from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -210,7 +226,8 @@ def add_deepspeed_args(parser):
                         choices=['model_only', 'model+optimizer'],
                         help='save model/optimizer states')
     # DeepSpeed automaticly add '--deepspeed' and '--deepspeed_config' to parser
-    parser = deepspeed.add_config_arguments(parser)
+    # 由于禁用了 deepspeed，这里跳过添加参数
+    # parser = deepspeed.add_config_arguments(parser)
     return parser
 
 
@@ -262,7 +279,15 @@ def init_distributed(args):
             torch.npu.set_device(local_rank)
         else:
             logging.error("not supported device: {}".format(args.device))
-        dist.init_process_group(args.dist_backend)
+        # Use FileStore for Windows to avoid libuv dependency issue
+        import tempfile
+        store_file = os.path.join(tempfile.gettempdir(), 'wenet_dist_store')
+        dist.init_process_group(
+            args.dist_backend,
+            init_method='file://' + store_file,
+            world_size=world_size,
+            rank=rank
+        )
     elif args.train_engine == "deepspeed":
         deepspeed.init_distributed(dist_backend=args.dist_backend)
     else:
@@ -347,7 +372,9 @@ def check_modify_and_save_config(args, configs, symbol_table):
     configs['train_engine'] = args.train_engine
     configs['use_amp'] = args.use_amp
     configs['model_dir'] = args.model_dir
-    configs['save_states'] = args.save_states
+    # 只有使用 deepspeed 时才有 save_states 属性
+    if hasattr(args, 'save_states'):
+        configs['save_states'] = args.save_states
 
     # Save configs to model_dir/train.yaml for inference and export
     if int(os.environ.get('RANK', 0)) == 0:
@@ -390,20 +417,23 @@ def init_dataset_and_dataloader(args, configs, tokenizer, seed=777):
 
     # NOTE(xcsong): Why we prefer persistent_workers=True ?
     #   https://discuss.pytorch.org/t/what-are-the-dis-advantages-of-persistent-workers/102110
+    # Handle prefetch_factor for num_workers=0 case
+    prefetch_factor = args.prefetch if args.num_workers > 0 else None
+
     train_data_loader = DataLoader(train_dataset,
                                    batch_size=None,
                                    pin_memory=args.pin_memory,
                                    num_workers=args.num_workers,
-                                   persistent_workers=True,
+                                   persistent_workers=True if args.num_workers > 0 else False,
                                    generator=generator,
-                                   prefetch_factor=args.prefetch)
+                                   prefetch_factor=prefetch_factor)
     cv_data_loader = DataLoader(cv_dataset,
                                 batch_size=None,
                                 pin_memory=args.pin_memory,
                                 num_workers=args.num_workers,
-                                persistent_workers=True,
+                                persistent_workers=True if args.num_workers > 0 else False,
                                 generator=generator,
-                                prefetch_factor=args.prefetch)
+                                prefetch_factor=prefetch_factor)
     return train_dataset, cv_dataset, train_data_loader, cv_data_loader
 
 
@@ -488,6 +518,9 @@ def wrap_cuda_model(args, model, configs=None):
     return model, device
 
 
+from wenet.optimizers.root import ROOT
+
+
 def init_optimizer_and_scheduler(args, configs, model):
     groups = []
     lr = configs['optim_conf'].get('lr')
@@ -521,6 +554,47 @@ def init_optimizer_and_scheduler(args, configs, model):
         optimizer = optim.Adam(params, **optim_conf)
     elif configs['optim'] == 'adamw':
         optimizer = optim.AdamW(params, **optim_conf)
+    elif configs['optim'] == 'root':
+        # ROOT optimizer requires special parameter grouping
+        # Separate parameters into root_params and adamw_params
+        # ROOT is used for 2D parameters (like linear layers)
+        # AdamW is used for 1D parameters (like embeddings, biases)
+        optim_conf = copy.deepcopy(configs['optim_conf'])
+        lr = optim_conf.pop('lr', 1e-3)
+        wd = optim_conf.pop('weight_decay', 0.1)
+        momentum = float(optim_conf.pop('momentum', 0.95))
+        nesterov = bool(optim_conf.pop('nesterov', True))
+        root_steps = int(optim_conf.pop('root_steps', 5))
+        adamw_betas = tuple(optim_conf.pop('adamw_betas', (0.9, 0.95)))
+        adamw_eps = float(optim_conf.pop('adamw_eps', 1e-8))
+
+        # Get model parameters
+        # Use model.parameters() instead of model.named_parameters()
+        # for DDP/FSDP compatibility
+        root_params = []
+        adamw_params = []
+        for param in model.parameters():
+            if param.requires_grad:
+                # ROOT for 2D parameters ONLY (linear layers)
+                # For safety with DDP, we only use ROOT on pure 2D parameters
+                # 1D and other parameters use AdamW
+                if param.ndim == 2:
+                    root_params.append(param)
+                else:
+                    adamw_params.append(param)
+
+        # Create ROOT optimizer
+        optimizer = ROOT(
+            lr=lr,
+            wd=wd,
+            root_params=root_params,
+            adamw_params=adamw_params,
+            momentum=momentum,
+            nesterov=nesterov,
+            root_steps=root_steps,
+            adamw_betas=adamw_betas,
+            adamw_eps=adamw_eps,
+        )
     else:
         raise ValueError("unknown optimizer: " + configs['optim'])
 
@@ -860,14 +934,17 @@ def log_per_step(writer, info_dict, timer: Optional[StepTimer] = None):
 
 def log_per_epoch(writer, info_dict):
     epoch = info_dict["epoch"]
-    loss_dict = info_dict["loss_dict"]
+    loss_dict = info_dict.get("loss_dict", {})
+    # Handle missing or invalid loss_dict
+    if not loss_dict or 'loss' not in loss_dict:
+        loss_dict = {'loss': 0.0, 'acc': 0.0}
     lrs = info_dict['lrs']
     rank = int(os.environ.get('RANK', 0))
     step = info_dict["step"]
     logging.info(
         'Epoch {} Step {} CV info lr {} cv_loss {} rank {} acc {}'.format(
-            epoch, step, lrs_to_str(lrs), tensor_to_scalar(loss_dict["loss"]),
-            rank, tensor_to_scalar(loss_dict["acc"])))
+            epoch, step, lrs_to_str(lrs), tensor_to_scalar(loss_dict.get("loss", 0.0)),
+            rank, tensor_to_scalar(loss_dict.get("acc", 0.0))))
 
     if int(os.environ.get('RANK', 0)) == 0:
         for i, lr in enumerate(info_dict["lrs"]):

@@ -15,6 +15,7 @@ fi
 # You can also manually specify ASCEND_RT_VISIBLE_DEVICES
 # if you don't want to utilize all available NPU resources.
 export ASCEND_RT_VISIBLE_DEVICES="${npu_list}"
+export PYTHONPATH="E:/vscode/wenet:$PYTHONPATH"
 echo "ASCEND_RT_VISIBLE_DEVICES is ${ASCEND_RT_VISIBLE_DEVICES}"
 
 stage=4 # start from 0 if you need to start from data preparation
@@ -54,7 +55,7 @@ train_set=train
 train_config=conf/train_conformer.yaml
 dir=exp/conformer
 tensorboard_dir=tensorboard
-checkpoint=
+checkpoint=$dir/init.pt
 num_workers=8
 prefetch=10
 
@@ -65,7 +66,7 @@ average_num=30
 decode_modes="ctc_greedy_search ctc_prefix_beam_search attention attention_rescoring"
 
 # specify your distributed training method among ['torch_ddp', 'torch_fsdp', 'deepspeed']
-train_engine=torch_fsdp
+train_engine=torch_ddp
 
 deepspeed_config=conf/ds_stage2.json
 deepspeed_save_states="model_only"
@@ -149,9 +150,28 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
   #                           This id is used by each node to join as a member of a particular worker group.
   #               `rdzv_endpoint` - The rendezvous backend endpoint; usually in form <host>:<port>.
   echo "$0: num_nodes is $num_nodes, proc_per_node is $num_npus"
-  torchrun --nnodes=$num_nodes --nproc_per_node=$num_npus \
-           --rdzv_id=$job_id --rdzv_backend="c10d" --rdzv_endpoint=$HOST_NODE_ADDR \
-    wenet/bin/train.py \
+  # Set environment variables for single-node training on Windows
+  export RANK=0
+  export WORLD_SIZE=1
+  export MASTER_ADDR=127.0.0.1
+  export MASTER_PORT=29500
+  export LOCAL_RANK=0
+
+  # For Windows, use gloo backend and run directly
+  PYTHONPATH="../../../:$PYTHONPATH" E:/vscode/Anacondaenvs/wenet_new/python wenet/bin/train.py \
+      --device "npu" \
+      --train_engine ${train_engine} \
+      --config $train_config \
+      --data_type  $data_type \
+      --train_data data/$train_set/data.list \
+      --cv_data data/dev/data.list \
+      ${checkpoint:+--checkpoint $checkpoint} \
+      --model_dir $dir \
+      --tensorboard_dir ${tensorboard_dir} \
+      --ddp.dist_backend "gloo" \
+      --num_workers ${num_workers} \
+      --prefetch ${prefetch} \
+      --pin_memory
       --device "npu" \
       --train_engine ${train_engine} \
       --config $train_config \
