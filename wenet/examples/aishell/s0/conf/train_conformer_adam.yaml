@@ -1,0 +1,93 @@
+cmvn: global_cmvn
+cmvn_conf:
+  cmvn_file: data/train/global_cmvn
+  is_json_cmvn: true
+ctc: ctc
+ctc_conf:
+  ctc_blank_id: 0
+dataset: asr
+dataset_conf:
+  batch_conf:
+    batch_size: 32
+    batch_type: static
+  fbank_conf:
+    dither: 0.1
+    frame_length: 25
+    frame_shift: 10
+    num_mel_bins: 80
+  filter_conf:
+    max_length: 40960
+    min_length: 0
+    token_max_length: 200
+    token_min_length: 1
+  resample_conf:
+    resample_rate: 16000
+  shuffle: true
+  shuffle_conf:
+    shuffle_size: 1500
+  sort: true
+  sort_conf:
+    sort_size: 500
+  spec_aug: true
+  spec_aug_conf:
+    max_f: 10
+    max_t: 50
+    num_f_mask: 2
+    num_t_mask: 2
+  speed_perturb: true
+decoder: transformer
+decoder_conf:
+  attention_heads: 4
+  dropout_rate: 0.1
+  linear_units: 2048
+  num_blocks: 6
+  positional_dropout_rate: 0.1
+  self_attention_dropout_rate: 0.0
+  src_attention_dropout_rate: 0.0
+encoder: conformer
+encoder_conf:
+  activation_type: swish
+  attention_dropout_rate: 0.0
+  attention_heads: 4
+  cnn_module_kernel: 15
+  dropout_rate: 0.1
+  input_layer: conv2d
+  linear_units: 2048
+  normalize_before: true
+  num_blocks: 12
+  output_size: 256
+  pos_enc_layer_type: rel_pos
+  positional_dropout_rate: 0.1
+  selfattention_layer_type: rel_selfattn
+  use_cnn_module: true
+grad_clip: 5
+accum_grad: 1
+max_epoch: 240
+log_interval: 100
+model: asr_model
+model_conf:
+  ctc_weight: 0.3
+  length_normalized_loss: false
+  lsm_weight: 0.1
+# Use Adam optimizer (more stable than Pogo for initial training)
+optim: adam
+optim_conf:
+  lr: 0.005
+  weight_decay: 0.0001
+# Use warmuplr scheduler
+scheduler: warmuplr
+scheduler_conf:
+  warmup_steps: 5000
+tokenizer: char
+tokenizer_conf:
+  bpe_path: null
+  is_multilingual: false
+  non_lang_syms_path: null
+  num_languages: 1
+  special_tokens:
+    <blank>: 0
+    <eos>: 2
+    <sos>: 2
+    <unk>: 1
+  split_with_space: false
+  symbol_table_path: data/dict/lang_char.txt
