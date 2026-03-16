@@ -2,10 +2,10 @@
 # encoder related
 encoder: conformer
 encoder_conf:
-    output_size: 640    # 更宽
+    output_size: 512    # 保持
     attention_heads: 8   # attention heads
     linear_units: 2048  # feed forward 维度
-    num_blocks: 14       # 更深
+    num_blocks: 12       # 保持
     dropout_rate: 0.08   # 稍微降低 dropout
     positional_dropout_rate: 0.08
     attention_dropout_rate: 0.0
