@@ -1,0 +1,106 @@
+# network architecture
+# encoder related
+encoder: conformer
+encoder_conf:
+    output_size: 512    # dimension of attention
+    attention_heads: 8   # attention heads
+    linear_units: 2048  # feed forward 维度
+    num_blocks: 12       # encoder blocks
+    dropout_rate: 0.08   # 稍微降低 dropout
+    positional_dropout_rate: 0.08
+    attention_dropout_rate: 0.0
+    input_layer: conv2d
+    normalize_before: true
+    cnn_module_kernel: 15
+    use_cnn_module: True
+    activation_type: 'swish'
+    pos_enc_layer_type: 'rel_pos'
+    selfattention_layer_type: 'rel_selfattn'
+
+# decoder related
+decoder: transformer
+decoder_conf:
+    attention_heads: 8
+    linear_units: 2048
+    num_blocks: 6
+    dropout_rate: 0.08
+    positional_dropout_rate: 0.08
+    self_attention_dropout_rate: 0.0
+    src_attention_dropout_rate: 0.0
+
+tokenizer: char
+tokenizer_conf:
+  symbol_table_path: 'data/dict/lang_char.txt'
+  split_with_space: false
+  bpe_path: null
+  non_lang_syms_path: null
+  is_multilingual: false
+  num_languages: 1
+  special_tokens:
+    <blank>: 0
+    <unk>: 1
+    <sos>: 2
+    <eos>: 2
+
+ctc: ctc
+ctc_conf:
+  ctc_blank_id: 0
+
+cmvn: global_cmvn
+cmvn_conf:
+  cmvn_file: 'data/train/global_cmvn'
+  is_json_cmvn: true
+
+# hybrid CTC/attention
+model: asr_model
+model_conf:
+    ctc_weight: 0.3
+    lsm_weight: 0.1
+    length_normalized_loss: false
+
+dataset: asr
+dataset_conf:
+    filter_conf:
+        max_length: 20480
+        min_length: 0
+        token_max_length: 200
+        token_min_length: 1
+    resample_conf:
+        resample_rate: 16000
+    speed_perturb: true    # 数据增强
+    fbank_conf:
+        num_mel_bins: 80
+        frame_shift: 10
+        frame_length: 25
+        dither: 0.0
+    spec_aug: true         # 数据增强
+    spec_aug_conf:
+        num_t_mask: 2
+        num_f_mask: 2
+        max_t_mask: 50
+        max_f_mask: 15
+    shuffle: true
+    sort: true
+    batch_conf:
+        batch_type: 'static'
+        batch_size: 20     # 增大 batch size
+
+grad_clip: 5
+accum_grad: 2
+max_epoch: 150            # 增加 epoch
+log_interval: 50
+
+# ROOT Optimizer Configuration - 优化版
+optim: root
+optim_conf:
+    lr: 0.004           # 提高学习率
+    weight_decay: 0.03  # 降低 weight decay
+    momentum: 0.95
+    nesterov: true
+    root_steps: 8       # 增加 ROOT 迭代次数
+    adamw_betas: [0.9, 0.98]  # 调整 betas
+    adamw_eps: 1e-8
+scheduler: warmuplr
+scheduler_conf:
+    warmup_steps: 15000  # 调整 warmup
+    warmup_ratio: 0.05
