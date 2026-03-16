@@ -85,7 +85,7 @@ log_interval: 100
 # ROOT Optimizer - 仅修改优化器，学习率调整
 optim: root
 optim_conf:
-    lr: 0.003           # 提高学习率（AdamW 是 0.002）
+    lr: 0.004           # 适合 root 优化器
     weight_decay: 0.01
     momentum: 0.95
     nesterov: true
