@@ -2,10 +2,10 @@
 # encoder related
 encoder: conformer
 encoder_conf:
-    output_size: 512    # dimension of attention
+    output_size: 640    # 更宽
     attention_heads: 8   # attention heads
     linear_units: 2048  # feed forward 维度
-    num_blocks: 12       # encoder blocks
+    num_blocks: 14       # 更深
     dropout_rate: 0.08   # 稍微降低 dropout
     positional_dropout_rate: 0.08
     attention_dropout_rate: 0.0
@@ -86,21 +86,21 @@ dataset_conf:
         batch_size: 16     # 保持 batch size
 
 grad_clip: 5
-accum_grad: 2
+accum_grad: 1            # 减少累加
 max_epoch: 150            # 增加 epoch
 log_interval: 50
 
 # ROOT Optimizer Configuration - 优化版
 optim: root
 optim_conf:
-    lr: 0.004           # 提高学习率
+    lr: 0.005           # 提高学习率
     weight_decay: 0.03  # 降低 weight decay
     momentum: 0.95
     nesterov: true
-    root_steps: 8       # 增加 ROOT 迭代次数
-    adamw_betas: [0.9, 0.98]  # 调整 betas
+    root_steps: 10      # 增加 ROOT 迭代次数
+    adamw_betas: [0.85, 0.95]  # 调整 betas
     adamw_eps: 1e-8
 scheduler: warmuplr
 scheduler_conf:
-    warmup_steps: 15000  # 调整 warmup
+    warmup_steps: 20000  # 更长 warmup
     warmup_ratio: 0.05
