@@ -75,7 +75,7 @@ dataset_conf:
     sort: false
     batch_conf:
         batch_type: 'static'
-        batch_size: 32
+        batch_size: 16
 
 grad_clip: 5
 accum_grad: 2
