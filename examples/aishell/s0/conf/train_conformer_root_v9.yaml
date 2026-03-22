@@ -1,4 +1,4 @@
-# ROOT optimizer config - v9 优化版本
+# ROOT optimizer config - 适配 64G 显存
 encoder: conformer
 encoder_conf:
     output_size: 144
@@ -78,18 +78,18 @@ dataset_conf:
         batch_size: 16
 
 grad_clip: 5
-accum_grad: 4
+accum_grad: 2
 max_epoch: 240
 log_interval: 100
 
-# ROOT Optimizer - v9 优化版本
+# ROOT Optimizer - 适配 64G 显存
 optim: root
 optim_conf:
-    lr: 0.003
-    weight_decay: 0.005
+    lr: 0.002           # 学习率
+    weight_decay: 0.007
     momentum: 0.95
     nesterov: true
-    root_steps: 5
+    root_steps: 8
     adamw_betas: [0.85, 0.98]
     adamw_eps: 1e-8
 scheduler: warmuplr
