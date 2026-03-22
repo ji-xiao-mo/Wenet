@@ -85,7 +85,7 @@ log_interval: 100
 # ROOT Optimizer - 适配 64G 显存
 optim: root
 optim_conf:
-    lr: 0.002           # 学习率
+    lr: 0.003           # 学习率
     weight_decay: 0.007
     momentum: 0.90
     nesterov: true
